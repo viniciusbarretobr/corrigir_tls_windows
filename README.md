@@ -4,16 +4,25 @@
 
 Habilita TLS 1.1 e TLS 1.2 (Client e Server), `SchUseStrongCrypto` para .NET, `DefaultSecureProtocols` para WinHTTP, e desabilita SSL 2.0 / 3.0. Resolve erro de conexão HTTPS com sites modernos que exigem TLS 1.2+ (GitHub, Cloudflare, APIs REST etc.).
 
-### 1. No CMD remoto de cada PC (como Administrador)
+### 1. Executar no servidor (como Administrador)
 
-> ⚠️ **Importante:** abrir **CMD**, não PowerShell. No PowerShell o `curl` é alias de `Invoke-WebRequest` e quebra. No Windows Server 2012 R2 também **não existe curl nativo**, por isso o comando abaixo usa PowerShell + `Invoke-WebRequest` forçando TLS 1.2 (resolve o galinha-ovo onde o HTTPS está quebrado justamente pra baixar o fix).
+> ⚠️ **CRÍTICO antes de copiar:**
+> - Verifique se as aspas são **retas** (`"` `'`), não curvas (`"` `'` `’`). Se estiver curvas, foi o renderizador/RDP — apague e digite as aspas manualmente.
+> - **Identifique o shell pelo prompt:** `C:\>` é CMD, `PS C:\>` é PowerShell. Use o comando correspondente abaixo.
+> - Win 2012 R2 **não tem curl nativo** — por isso usamos `Invoke-WebRequest` forçando TLS 1.2.
 
-**Comando único (CMD admin, copia e cola):**
+**A) Se estiver no CMD (`C:\Users\Administrador>`):**
 ```
-powershell -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat' -OutFile $env:TEMP\corrigir_tls.bat; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat' -OutFile $env:TEMP\testar_tls.bat" && %TEMP%\corrigir_tls.bat
+powershell -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iwr https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat -OutFile $env:TEMP\corrigir_tls.bat -UseBasicParsing; iwr https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat -OutFile $env:TEMP\testar_tls.bat -UseBasicParsing"
+%TEMP%\corrigir_tls.bat
 ```
 
-**Se mesmo o PowerShell falhar** (TLS 1.2 não habilitado nem no .NET ainda), use BITSAdmin que ignora SCHANNEL do .NET:
+**B) Se estiver no PowerShell (`PS C:\Users\Administrador>`):**
+```
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iwr https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat -OutFile $env:TEMP\corrigir_tls.bat -UseBasicParsing; iwr https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat -OutFile $env:TEMP\testar_tls.bat -UseBasicParsing; & $env:TEMP\corrigir_tls.bat
+```
+
+**C) Fallback se PowerShell/iwr falhar (TLS quebrado até no .NET):** use BITSAdmin nativo (não depende de SCHANNEL do .NET):
 ```
 bitsadmin /transfer fixtls /priority foreground https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat %TEMP%\corrigir_tls.bat
 bitsadmin /transfer testtls /priority foreground https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat %TEMP%\testar_tls.bat
