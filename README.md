@@ -91,3 +91,21 @@ where curl >nul 2>&1 || (powershell -Command "Invoke-WebRequest -Uri 'https://cu
 | Compat com sites que exigirem TLS 1.3 | impossível | impossível (precisa migrar SO) |
 
 **Recomendação:** Win 2012 R2 fora de suporte desde out/2023. Script é paliativo. Migração para Server 2022+ é solução definitiva.
+
+## Limitações conhecidas (testado em produção 2026-05-06)
+
+Mesmo com TUDO aplicado (KB3172614 + KB5031419 + cipher order ECDHE-GCM no topo + EccCurves + .NET 4.8), o SCHANNEL do Windows Server 2012 R2 **continua negociando AES128-CBC-RSA** ao invés de ECDHE-RSA-GCM. Bug/limitação do `SslStream` e `WinHTTP` chamarem SCHANNEL via API que não negocia ECDHE mesmo configurado.
+
+Consequências:
+
+| Tipo de site | Funciona? |
+|--------------|-----------|
+| HTTPS comum (RSA cert, aceita CBC) — GitHub, Google, Cloudflare, AWS | ✅ |
+| Sites com **cert ECDSA-only** (dwservice.net, alguns Cloudflare) | ❌ "SSPI failure" — SCHANNEL não oferece ECDHE-ECDSA |
+| Sites com **TLS 1.3 obrigatório** | ❌ SO não suporta TLS 1.3 |
+| Sites com **bloqueio de rede do datacenter** (Globo, Akamai em alguns ASNs) | ❌ TCP timeout — não é TLS, é rede |
+
+**Para esses casos, soluções fora deste script:**
+1. **Cloudflare WARP** (script separado em `warp_windows`) — bypass total via rede CF moderna
+2. **Stunnel local** — só pra apps configuráveis com proxy
+3. **Migrar para Windows Server 2022+** — solução definitiva

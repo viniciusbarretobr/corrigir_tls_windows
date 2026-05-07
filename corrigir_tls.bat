@@ -133,10 +133,44 @@ if exist "%SST_FILE%" (
 )
 
 REM ============================================================
-REM 7. Resumo + grava timestamp
+REM 7. Instala KB3172614 (July 2016 monthly rollup) no Win 8.1 / 2012 R2
+REM Adiciona suporte ECDHE-ECDSA-GCM ao SCHANNEL. Sem isso, sites com
+REM certificado ECDSA (Cloudflare, Fastly modernos, dwservice.net etc.)
+REM falham com "SSPI / canal seguro nao pode ser criado".
 REM ============================================================
 echo.
-echo [7/7] Resumo das chaves aplicadas:
+echo [7/8] Verificando KB3172614 (suporte ECDHE-ECDSA)...
+ver | findstr /C:"6.3" >nul 2>&1
+if errorlevel 1 (
+    echo       SKIP - SO nao e Win 8.1 / Server 2012 R2
+    goto :resumo
+)
+powershell -NoProfile -Command "if (Get-HotFix -Id KB3172614 -EA SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+    echo       OK - KB3172614 ja instalado
+    goto :resumo
+)
+echo       Baixando KB3172614 ^(102 MB^)...
+set "KB_URL=https://download.microsoft.com/download/A/8/6/A8686706-78A3-4AC9-ABD2-64DC20A4581F/Windows8.1-KB3172614-x64.msu"
+set "KB_MSU=%TEMP%\KB3172614.msu"
+del "%KB_MSU%" >nul 2>&1
+powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { iwr '%KB_URL%' -OutFile '%KB_MSU%' -UseBasicParsing } catch { exit 1 }"
+if not exist "%KB_MSU%" (
+    echo       FALHOU - download bloqueado ^(Akamai/rede^). Baixe manualmente
+    echo       URL: %KB_URL%
+    echo       Salve em: %KB_MSU% e re-execute este script
+    goto :resumo
+)
+echo       OK - baixado. Instalando ^(pode levar 5-15min^)...
+wusa.exe "%KB_MSU%" /quiet /norestart /log:"%TEMP%\wusa_kb3172614.evtx"
+echo       OK - KB3172614 instalado ^(efeito apos reboot^)
+
+:resumo
+REM ============================================================
+REM 8. Resumo + grava timestamp
+REM ============================================================
+echo.
+echo [8/8] Resumo das chaves aplicadas:
 echo ------------------------------------------------------------
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client" 2>nul | findstr /C:"Enabled" /C:"DisabledByDefault"
 reg query "HKLM\SOFTWARE\Microsoft\.NETFramework\v4.0.30319" 2>nul | findstr /C:"SchUseStrongCrypto" /C:"SystemDefaultTlsVersions"
