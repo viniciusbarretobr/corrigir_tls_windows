@@ -14,7 +14,7 @@ echo ============================================================
 
 REM --- 1. Chaves de registro ---
 echo.
-echo [1/6] Verificando chaves de registro...
+echo [1/8] Verificando chaves de registro...
 echo ------------------------------------------------------------
 echo --- SCHANNEL TLS 1.2 Client ---
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.2\Client" 2>nul | findstr /C:"Enabled" /C:"DisabledByDefault"
@@ -22,29 +22,31 @@ echo --- .NET 4.x SchUseStrongCrypto ---
 reg query "HKLM\SOFTWARE\Microsoft\.NETFramework\v4.0.30319" 2>nul | findstr /C:"SchUseStrongCrypto" /C:"SystemDefaultTlsVersions"
 echo --- WinHTTP DefaultSecureProtocols ---
 reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp" 2>nul | findstr /C:"DefaultSecureProtocols"
+echo --- Cipher Suite Order (primeiros 200 chars) ---
+reg query "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002" /v Functions 2>nul
 echo ------------------------------------------------------------
 
 REM --- 2. .NET WebClient (testa SchUseStrongCrypto) ---
 echo.
-echo [2/6] Teste .NET WebClient -^> https://www.google.com
+echo [2/8] Teste .NET WebClient -^> https://www.google.com
 echo ------------------------------------------------------------
 powershell -NoProfile -Command "try { $r = (New-Object Net.WebClient).DownloadString('https://www.google.com'); Write-Host '       OK - .NET WebClient conectou (' $r.Length ' bytes)' } catch { Write-Host '       FALHOU -' $_.Exception.Message }"
 
 REM --- 3. PowerShell Invoke-WebRequest TLS 1.2 forcado ---
 echo.
-echo [3/6] Teste Invoke-WebRequest com TLS 1.2 forcado -^> github.com API
+echo [3/8] Teste Invoke-WebRequest com TLS 1.2 forcado -^> github.com API
 echo ------------------------------------------------------------
 powershell -NoProfile -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $r = Invoke-WebRequest -Uri 'https://api.github.com' -UseBasicParsing; Write-Host '       OK - HTTP' $r.StatusCode '(' $r.RawContentLength ' bytes)' } catch { Write-Host '       FALHOU -' $_.Exception.Message }"
 
 REM --- 4. PowerShell sem forcar TLS (testa SystemDefaultTlsVersions) ---
 echo.
-echo [4/6] Teste Invoke-WebRequest SEM forcar TLS -^> github.com API
+echo [4/8] Teste Invoke-WebRequest SEM forcar TLS -^> github.com API
 echo ------------------------------------------------------------
 powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'https://api.github.com' -UseBasicParsing; Write-Host '       OK - HTTP' $r.StatusCode '(default TLS funcionou)' } catch { Write-Host '       FALHOU -' $_.Exception.Message }"
 
 REM --- 5. curl (testa SCHANNEL nativo) ---
 echo.
-echo [5/6] Teste curl (SCHANNEL nativo) -^> howsmyssl.com
+echo [5/8] Teste curl (SCHANNEL nativo) -^> howsmyssl.com
 echo ------------------------------------------------------------
 where curl >nul 2>&1
 if %errorLevel% equ 0 (
@@ -56,9 +58,27 @@ if %errorLevel% equ 0 (
 
 REM --- 6. Versao TLS negociada com Cloudflare ---
 echo.
-echo [6/6] Versao TLS negociada -^> www.cloudflare.com
+echo [6/8] Versao TLS negociada -^> www.cloudflare.com
 echo ------------------------------------------------------------
 powershell -NoProfile -Command "try { $req = [Net.HttpWebRequest]::Create('https://www.cloudflare.com'); $req.Timeout=10000; $resp = $req.GetResponse(); Write-Host '       OK - Status:' $resp.StatusCode; $resp.Close() } catch { Write-Host '       FALHOU -' $_.Exception.Message }"
+
+REM --- 7. Cifra negociada com Let's Encrypt (testa cipher order + raizes) ---
+echo.
+echo [7/8] Cifra negociada + cadeia LE -^> https://letsencrypt.org
+echo ------------------------------------------------------------
+where curl >nul 2>&1
+if %errorLevel% equ 0 (
+    curl -v --max-time 15 -o nul https://letsencrypt.org 2>&1 | findstr /C:"SSL connection" /C:"subject:" /C:"issuer:" /C:"ALPN"
+    if errorlevel 1 echo       FALHOU - veja se raizes ISRG estao instaladas
+) else (
+    powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'https://letsencrypt.org' -UseBasicParsing | Out-Null; Write-Host '       OK - cadeia Let''s Encrypt valida' } catch { Write-Host '       FALHOU -' $_.Exception.Message }"
+)
+
+REM --- 8. Conta raizes confiaveis instaladas ---
+echo.
+echo [8/8] Quantidade de certificados raiz confiaveis instalados:
+echo ------------------------------------------------------------
+powershell -NoProfile -Command "$c = (Get-ChildItem Cert:\LocalMachine\Root).Count; Write-Host '       Total:' $c 'raizes confiaveis (esperado: 100+)'"
 
 echo.
 echo ============================================================

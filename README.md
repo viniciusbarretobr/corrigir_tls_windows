@@ -38,6 +38,9 @@ Procurar `tls_version` = `TLS 1.2` ou `TLS 1.3` na saída e todos os testes `OK`
 | .NET 2.0/3.5 (64+32 bit) | `SchUseStrongCrypto=1`, `SystemDefaultTlsVersions=1` | Apps legados também |
 | WinHTTP | `DefaultSecureProtocols=0xAA0` (TLS 1.0+1.1+1.2) | Apps WinHTTP (Office, updates) |
 | WinINET (IE) | `SecureProtocols=0xA80` (TLS 1.0+1.1+1.2) | Internet Explorer e apps embarcados |
+| Cipher Suite Order | `Functions` (ECDHE+GCM no topo) | Prioriza forward secrecy + AEAD; satisfaz bancos/APIs estritos |
+| Curvas ECC | `EccCurves=NistP384,NistP256` | Curvas modernas suportadas no SO |
+| Raízes confiáveis | `certutil -generateSSTFromWU` + `addstore` | Importa raízes novas (ISRG, Google GTS, etc.) sem esperar Windows Update |
 
 ## Notas
 
@@ -57,3 +60,17 @@ where curl >nul 2>&1 || (powershell -Command "Invoke-WebRequest -Uri 'https://cu
    - Soma = `0xAA0` (habilita os três)
 
 5. Log do `corrigir_tls.bat` fica em `%TEMP%\corrigir_tls.log`.
+
+6. **Atualização de raízes pode falhar antes do reboot** se o WinHTTP do `certutil` ainda usar o estado antigo de TLS. Caso veja `AVISO - generateSSTFromWU falhou`, re-execute `corrigir_tls.bat` após o reboot — só a parte `[6/7]` precisa rodar.
+
+7. **Cipher suites** são apenas as nativas do SO. Win 2012 R2 não tem `X25519`, `ChaCha20-Poly1305` nem TLS 1.3 — script só reordena o que já existe.
+
+## Sobrevida estimada
+
+| Componente | Sem script | Com script |
+|------------|-----------|------------|
+| HTTPS sites modernos | já quebrado | 4-6 anos |
+| Cadeia Let's Encrypt / Google GTS | quebra ao expirar raiz antiga | OK até nova raiz aparecer (re-rodar) |
+| Compat com sites que exigirem TLS 1.3 | impossível | impossível (precisa migrar SO) |
+
+**Recomendação:** Win 2012 R2 fora de suporte desde out/2023. Script é paliativo. Migração para Server 2022+ é solução definitiva.
