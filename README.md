@@ -4,12 +4,20 @@
 
 Habilita TLS 1.1 e TLS 1.2 (Client e Server), `SchUseStrongCrypto` para .NET, `DefaultSecureProtocols` para WinHTTP, e desabilita SSL 2.0 / 3.0. Resolve erro de conexão HTTPS com sites modernos que exigem TLS 1.2+ (GitHub, Cloudflare, APIs REST etc.).
 
-### 1. No CMD remoto de cada PC (como Administrador):
+### 1. No CMD remoto de cada PC (como Administrador)
+
+> ⚠️ **Importante:** abrir **CMD**, não PowerShell. No PowerShell o `curl` é alias de `Invoke-WebRequest` e quebra. No Windows Server 2012 R2 também **não existe curl nativo**, por isso o comando abaixo usa PowerShell + `Invoke-WebRequest` forçando TLS 1.2 (resolve o galinha-ovo onde o HTTPS está quebrado justamente pra baixar o fix).
+
+**Comando único (CMD admin, copia e cola):**
 ```
-del %TEMP%\corrigir_tls.cmd %TEMP%\testar_tls.cmd
-curl -L -o %TEMP%\corrigir_tls.cmd https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat
-curl -L -o %TEMP%\testar_tls.cmd https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat
-%TEMP%\corrigir_tls.cmd
+powershell -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat' -OutFile $env:TEMP\corrigir_tls.bat; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat' -OutFile $env:TEMP\testar_tls.bat" && %TEMP%\corrigir_tls.bat
+```
+
+**Se mesmo o PowerShell falhar** (TLS 1.2 não habilitado nem no .NET ainda), use BITSAdmin que ignora SCHANNEL do .NET:
+```
+bitsadmin /transfer fixtls /priority foreground https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/corrigir_tls.bat %TEMP%\corrigir_tls.bat
+bitsadmin /transfer testtls /priority foreground https://raw.githubusercontent.com/viniciusbarretobr/corrigir_tls_windows/main/testar_tls.bat %TEMP%\testar_tls.bat
+%TEMP%\corrigir_tls.bat
 ```
 
 ### 2. Reboot OBRIGATÓRIO:
@@ -20,9 +28,9 @@ shutdown /r /t 10 /c "Reboot para aplicar correcao TLS"
 
 ### 3. Validar após reboot:
 ```
-%TEMP%\testar_tls.cmd
+%TEMP%\testar_tls.bat
 ```
-Procurar `tls_version` = `TLS 1.2` ou `TLS 1.3` na saída e todos os testes `OK`.
+Procurar `tls_version` = `TLS 1.2` na saída e todos os testes `OK`. (Win 2012 R2 não suporta TLS 1.3, então 1.2 é o máximo esperado.)
 
 ---
 
